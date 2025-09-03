@@ -62,16 +62,21 @@ def main():
     inputs = []
     
     if remaining:
-        # Try to interpret last arg as timeout
-        try:
-            potential_timeout = float(remaining[-1])
-            # Check if this could be a valid timeout (not a file that happens to be numeric)
-            if not os.path.isfile(remaining[-1]):
-                timeout = potential_timeout
-                inputs = remaining[:-1] if len(remaining) > 1 else []
-            else:
+        # Check if we have multiple args and last one could be timeout
+        if len(remaining) > 1:
+            try:
+                # Try to parse last arg as timeout
+                potential_timeout = float(remaining[-1])
+                # Only treat as timeout if it's not a valid input source
+                if not os.path.isfile(remaining[-1]) and not remaining[-1].isdigit() and remaining[-1] != "INPUT":
+                    timeout = potential_timeout
+                    inputs = remaining[:-1]
+                else:
+                    inputs = remaining
+            except ValueError:
                 inputs = remaining
-        except ValueError:
+        else:
+            # Single remaining arg is always input, never timeout
             inputs = remaining
     
     # Must have at least one input  
