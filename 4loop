@@ -15,6 +15,10 @@ def parse_input(source):
     else:
         return None
 
+def is_valid_input(source):
+    """Check if something could be a valid input source."""
+    return source == "INPUT" or source.isdigit() or os.path.isfile(source)
+
 def replace_vars(cmd, values):
     """Replace LINE variables intelligently based on number of values."""
     if len(values) == 1:
@@ -40,7 +44,8 @@ def main():
         print("\nExamples:")
         print("  4loop 'echo LINE' file.txt")
         print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt")
-        print("  4loop -z 'ssh LINE1 \"test LINE2\"' users.txt passwords.txt")
+        print("  seq 1 5 | 4loop 'echo LINE' INPUT")
+        print("  4loop -z 'ssh LINE1 \"test LINE2\"' users.txt passwords.txt 0.5")
         sys.exit(1)
     
     # Parse mode flag
@@ -57,31 +62,49 @@ def main():
     cmd = args[0]
     remaining = args[1:]
     
-    # Parse timeout (if last arg is a float)
-    timeout = 0.075
+    # Parse inputs and timeout more intelligently
     inputs = []
+    timeout = 0.075
     
-    if remaining:
-        # Check if we have multiple args and last one could be timeout
-        if len(remaining) > 1:
-            try:
-                # Try to parse last arg as timeout
-                potential_timeout = float(remaining[-1])
-                # Check if it's a decimal number (has a dot) or could be a timeout value
-                # Don't treat whole numbers as timeout unless they have a decimal point
-                is_timeout = ('.' in remaining[-1] or 
-                             (potential_timeout == 0) or 
-                             (not os.path.isfile(remaining[-1]) and not remaining[-1].isdigit() and remaining[-1] != "INPUT"))
-                if is_timeout:
-                    timeout = potential_timeout
-                    inputs = remaining[:-1]
-                else:
-                    inputs = remaining
-            except ValueError:
-                inputs = remaining
+    # Collect valid inputs from left to right
+    for i, arg in enumerate(remaining):
+        if is_valid_input(arg):
+            inputs.append(arg)
         else:
-            # Single remaining arg is always input, never timeout
-            inputs = remaining
+            # Not a valid input - might be timeout if it's the last arg
+            if i == len(remaining) - 1:
+                try:
+                    timeout = float(arg)
+                except ValueError:
+                    print(f"Error: '{arg}' is not a valid input or timeout")
+                    sys.exit(1)
+            else:
+                print(f"Error: '{arg}' is not a valid input source")
+                sys.exit(1)
+            break
+    
+    # Special case: if we have valid inputs and the last arg is numeric,
+    # decide if it's timeout or another input
+    if inputs and len(remaining) > len(inputs):
+        last_arg = remaining[-1]
+        try:
+            potential_timeout = float(last_arg)
+            # Rules for treating last numeric as timeout:
+            # 1. If INPUT is present and this would be the only other arg -> timeout
+            # 2. If we already have 2 inputs -> timeout
+            # 3. If it has a decimal point -> timeout
+            # 4. If it's 0 -> timeout (common for "no delay")
+            # 5. Otherwise -> treat as input
+            if (('INPUT' in inputs and len(inputs) == 1) or
+                len(inputs) >= 2 or
+                '.' in last_arg or
+                potential_timeout == 0):
+                timeout = potential_timeout
+                # Remove the last item from inputs if we added it
+                if last_arg in inputs:
+                    inputs.pop()
+        except ValueError:
+            pass
     
     # Must have at least one input  
     if not inputs:
@@ -95,7 +118,7 @@ def main():
         if parsed is None:
             print(f"Error: '{inp}' is not a valid file, number, or INPUT")
             sys.exit(1)
-        if not parsed:  # Empty file
+        if not parsed:  # Empty file/input
             print(f"Warning: '{inp}' is empty")
             continue
         lists.append(parsed)
