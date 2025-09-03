@@ -3,17 +3,17 @@ import sys, os, time, re
 from itertools import cycle
 
 def parse_input(source):
-    """Parse an input source into a list of lines."""
+    """Parse an input source into a list of lines. Returns (data, is_numeric)."""
     if source == "INPUT":
-        return [line.rstrip() for line in sys.stdin.readlines()]
+        return [line.rstrip() for line in sys.stdin.readlines()], False
     elif source.isdigit():
-        # For numeric input, return indices 1 to N for backward compatibility
-        return [str(i+1) for i in range(int(source))]
+        # For numeric input, return None for data (will check LINE usage)
+        return int(source), True
     elif os.path.isfile(source):
         with open(source, 'r') as f:
-            return [line.rstrip() for line in f.readlines()]
+            return [line.rstrip() for line in f.readlines()], False
     else:
-        return None
+        return None, False
 
 def parse_timeout(arg):
     """Parse a timeout value. Returns (is_timeout, timeout_value)."""
@@ -42,6 +42,10 @@ def is_valid_input(source):
         return False
     return source == "INPUT" or source.isdigit() or os.path.isfile(source)
 
+def uses_line_vars(cmd):
+    """Check if command uses LINE, LINE1, or LINE2 variables."""
+    return 'LINE' in cmd or 'LINE1' in cmd or 'LINE2' in cmd
+
 def replace_vars(cmd, values):
     """Replace LINE variables intelligently based on number of values."""
     if len(values) == 1:
@@ -67,7 +71,7 @@ def main():
         print("\nTimeout can use suffixes: 3s (seconds), 500ms (milliseconds)")
         print("\nExamples:")
         print("  4loop 'echo LINE' file.txt")
-        print("  4loop 'echo LINE' 5 3s          # 5 iterations, 3 second timeout")
+        print("  4loop 'echo hello' 5 3s          # 5 iterations, 3 second timeout")
         print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt 500ms")
         print("  seq 1 5 | 4loop 'echo LINE' INPUT 2s")
         sys.exit(1)
@@ -153,17 +157,47 @@ def main():
         print("Error: No input source provided")
         sys.exit(1)
     
-    # Parse input sources
+    # Parse input sources and check for numeric-only with LINE usage
     lists = []
+    all_numeric = True
+    numeric_counts = []
+    
     for inp in inputs:
-        parsed = parse_input(inp)
+        parsed, is_numeric = parse_input(inp)
         if parsed is None:
             print(f"Error: '{inp}' is not a valid file, number, or INPUT")
             sys.exit(1)
-        if not parsed:  # Empty file/input
-            print(f"Warning: '{inp}' is empty")
-            continue
-        lists.append(parsed)
+        
+        if is_numeric:
+            numeric_counts.append(parsed)
+        else:
+            all_numeric = False
+            if not parsed:  # Empty file/input
+                print(f"Warning: '{inp}' is empty")
+                continue
+            lists.append(parsed)
+    
+    # Check if we have numeric-only inputs with LINE variable usage
+    if all_numeric and uses_line_vars(cmd):
+        print("Error: LINE variables require actual data input (file or INPUT)")
+        print("  To repeat without substitution: 4loop 'echo hello' " + ' '.join(inputs))
+        print("  To generate a sequence: seq 1 " + inputs[0] + " | 4loop '" + cmd + "' INPUT")
+        sys.exit(1)
+    
+    # Handle numeric iterations (no LINE substitution)
+    if all_numeric:
+        if len(numeric_counts) == 1:
+            # Simple repetition
+            for _ in range(numeric_counts[0]):
+                os.system(cmd)
+                time.sleep(timeout)
+        elif len(numeric_counts) == 2:
+            # Cartesian product of iterations (rare but supported)
+            for _ in range(numeric_counts[0]):
+                for _ in range(numeric_counts[1]):
+                    os.system(cmd)
+                    time.sleep(timeout)
+        sys.exit(0)
     
     if not lists:
         print("Error: All input sources are empty")
@@ -171,7 +205,7 @@ def main():
     
     # Execute based on number of inputs and mode
     if len(lists) == 1:
-        # Single input - simple iteration (backward compatible)
+        # Single input - simple iteration
         for line in lists[0]:
             exec_cmd = replace_vars(cmd, [line])
             os.system(exec_cmd)
