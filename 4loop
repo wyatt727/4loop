@@ -1,51 +1,156 @@
 #!/usr/bin/env python3
-#---------------------------------------------------------------------------------
-# In this example, test.txt contains the numbers 1-5 each seperated by a '\n'
-#---------------------------------------------------------------------------------
-# Usage with file:            # Usage with specified integer    # Usage with line count from file 
-# 4loop 'echo LINE' test.txt    4loop 'echo hello world' 5        4loop 'echo foo' test.txt 
-# output:                       output:                           output:     
-# 1                             hello world                       foo
-# 2                             hello world                       foo 
-# 3                             hello world                       foo
-# 4                             hello world                       foo
-# 5                             hello world                       foo
+import sys, os, time
+from itertools import product, cycle
 
-# Usage with piped input:
-# seq 1 5 | 4loop 'echo -LINE-' INPUT
-# output:
-# -1-
-# -2-
-# -3-
-# -4-
-# -5-
-
-# Adding a number after the input variable adjusts the timeout between each command iteration (default: .075)
-# 4loop 'echo LINE' file.txt 0
-
-# This program is especially useful with parsed port files containing IPs
-# 4loop 'showmount -e LINE' port-2049.txt
-#----------------------------------------------------------------------------------
-import sys,os,time
-try: # Define variables, timeout=arg3 unless there isn't arg3, then it's .075
-    cmd, itr, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else .075
-    if not itr.isdigit():
-        if itr == "INPUT": # If arg2=="INPUT" assume it's piped input
-            for line in sys.stdin.readlines(): 
-                os.system(cmd.replace("LINE", line.rstrip())) # For each line in input, do command but replace LINE with line from input
-                time.sleep(timeout)
-        elif os.path.exists(itr): # If arg2 is file, open file and read lines
-            with open(itr) as f:
-                for line in f:
-                    os.system(cmd.replace("LINE", line.rstrip())) # For each line in file, do command but replace LINE with line from file
-                    time.sleep(timeout)
-        else:
-            raise ValueError
+def parse_input(source):
+    """Parse an input source into a list of lines."""
+    if source == "INPUT":
+        return [line.rstrip() for line in sys.stdin.readlines()]
+    elif source.isdigit():
+        # For numeric input, return indices 1 to N for backward compatibility
+        return [str(i+1) for i in range(int(source))]
+    elif os.path.isfile(source):
+        with open(source, 'r') as f:
+            return [line.rstrip() for line in f.readlines()]
     else:
-        for i in range(int(itr)): # Else do command as many times as the int specified in Arg2
-            os.system(cmd.replace("LINE", str(i+1)))
+        return None
+
+def replace_vars(cmd, values):
+    """Replace LINE variables intelligently based on number of values."""
+    if len(values) == 1:
+        # Single input: all variants map to same value
+        cmd = cmd.replace("LINE2", values[0])
+        cmd = cmd.replace("LINE1", values[0])
+        cmd = cmd.replace("LINE", values[0])
+    else:
+        # Two inputs: LINE2->second, LINE1->first, LINE->first
+        cmd = cmd.replace("LINE2", values[1])
+        cmd = cmd.replace("LINE1", values[0])
+        cmd = cmd.replace("LINE", values[0])
+    return cmd
+
+def main():
+    args = sys.argv[1:]
+    
+    if len(args) < 2:
+        print("Usage: 4loop [-z|-c] '[command]' [input1] [input2] [timeout]")
+        print("  -z: Zip mode (pair lines 1:1, stop at shortest)")
+        print("  -c: Cycle mode (repeat shorter file to match longer)")
+        print("  default: Cartesian product (all combinations)")
+        print("\nExamples:")
+        print("  4loop 'echo LINE' file.txt")
+        print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt")
+        print("  4loop -z 'ssh LINE1 \"test LINE2\"' users.txt passwords.txt")
+        sys.exit(1)
+    
+    # Parse mode flag
+    mode = 'cartesian'
+    if args[0] in ['-z', '-c']:
+        mode = 'zip' if args[0] == '-z' else 'cycle'
+        args = args[1:]
+        
+    # Ensure we still have enough args after flag parsing
+    if len(args) < 2:
+        print("Error: Not enough arguments after mode flag")
+        sys.exit(1)
+    
+    cmd = args[0]
+    remaining = args[1:]
+    
+    # Parse timeout (if last arg is a float)
+    timeout = 0.075
+    inputs = []
+    
+    if remaining:
+        # Try to interpret last arg as timeout
+        try:
+            potential_timeout = float(remaining[-1])
+            # Check if this could be a valid timeout (not a file that happens to be numeric)
+            if not os.path.isfile(remaining[-1]):
+                timeout = potential_timeout
+                inputs = remaining[:-1] if len(remaining) > 1 else []
+            else:
+                inputs = remaining
+        except ValueError:
+            inputs = remaining
+    
+    # Must have at least one input
+    if not inputs:
+        print("Error: No input source provided")
+        sys.exit(1)
+    
+    # Parse input sources
+    lists = []
+    for inp in inputs:
+        parsed = parse_input(inp)
+        if parsed is None:
+            print(f"Error: '{inp}' is not a valid file, number, or INPUT")
+            sys.exit(1)
+        if not parsed:  # Empty file
+            print(f"Warning: '{inp}' is empty")
+            continue
+        lists.append(parsed)
+    
+    if not lists:
+        print("Error: All input sources are empty")
+        sys.exit(1)
+    
+    # Execute based on number of inputs and mode
+    if len(lists) == 1:
+        # Single input - simple iteration (backward compatible)
+        for line in lists[0]:
+            exec_cmd = replace_vars(cmd, [line])
+            os.system(exec_cmd)
             time.sleep(timeout)
-except KeyboardInterrupt:
-    exit()
-except:
-    print("SYNTAX: 4loop '[command]' [iterations or filename] [optional: timeout]")
+    
+    elif len(lists) == 2:
+        # Two inputs - use specified mode
+        if mode == 'cartesian':
+            # All combinations (default)
+            for line1 in lists[0]:
+                for line2 in lists[1]:
+                    exec_cmd = replace_vars(cmd, [line1, line2])
+                    os.system(exec_cmd)
+                    time.sleep(timeout)
+        
+        elif mode == 'zip':
+            # Pair lines 1:1, stop at shortest
+            for line1, line2 in zip(lists[0], lists[1]):
+                exec_cmd = replace_vars(cmd, [line1, line2])
+                os.system(exec_cmd)
+                time.sleep(timeout)
+        
+        elif mode == 'cycle':
+            # Cycle shorter list to match longer
+            if len(lists[0]) >= len(lists[1]):
+                # Cycle second list
+                cycled = cycle(lists[1])
+                for line1 in lists[0]:
+                    line2 = next(cycled)
+                    exec_cmd = replace_vars(cmd, [line1, line2])
+                    os.system(exec_cmd)
+                    time.sleep(timeout)
+            else:
+                # Cycle first list
+                cycled = cycle(lists[0])
+                for line2 in lists[1]:
+                    line1 = next(cycled)
+                    exec_cmd = replace_vars(cmd, [line1, line2])
+                    os.system(exec_cmd)
+                    time.sleep(timeout)
+    else:
+        print("Error: Maximum 2 input sources supported")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[!] Interrupted")
+        sys.exit(130)
+    except BrokenPipeError:
+        # Handle pipe closure gracefully
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
