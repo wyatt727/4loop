@@ -80,10 +80,9 @@ def main():
             inputs = remaining
     
     # Must have at least one input  
-    # Handle special case where no inputs after timeout parse
-    if not inputs and remaining:
-        # The remaining args were consumed as timeout, but should be input
-        inputs = remaining
+    if not inputs:
+        print("Error: No input source provided")
+        sys.exit(1)
     
     # Parse input sources
     lists = []
