@@ -62,32 +62,51 @@ Iterate over lines in a file, replacing `LINE` with each line's content:
 # 5
 ```
 
-### Unambiguous Timeout Specification
-Use time suffixes to clearly specify timeouts:
+### Important: LINE Variables Require Data
+
+**LINE, LINE1, and LINE2 only work with actual data sources** (files or INPUT):
 
 ```bash
-# 3 iterations with 3-second delay (explicit)
-4loop 'echo hello' 3 3s
+# ✗ WRONG - Will error
+4loop 'echo LINE' 5              # Error: LINE needs data
+4loop 'echo LINE1:LINE2' 3 3     # Error: LINE needs data
 
-# 5 iterations with 500ms delay
-4loop 'ping -c 1 target.com' 5 500ms
+# ✓ CORRECT - Provide actual data
+seq 1 5 | 4loop 'echo LINE' INPUT       # Uses piped data
+4loop 'echo LINE' file.txt              # Uses file data
+4loop 'echo hello' 5                    # No LINE, just repeat
+```
 
-# Without suffix, "3 3" would be two inputs!
-4loop 'echo LINE' 3 3     # Outputs: 1,2,3 repeated 3 times
-4loop 'echo LINE' 3 3s    # Outputs: 1,2,3 with 3s delays
+### Timeout Specification
+
+Use suffixes for clear timeouts:
+
+```bash
+# Explicit timeouts with suffixes
+4loop 'echo hello' 3 3s          # 3 iterations, 3 second delay
+4loop 'curl api.test' 5 500ms    # 5 iterations, 500ms delay
+
+# Without LINE, "3 3" means 3×3 iterations
+4loop 'echo hello' 3 3            # 9 iterations (3×3)
+4loop 'echo hello' 3 3s           # 3 iterations with 3s delay
 ```
 
 ### Repeat Command N Times
-Execute a command a specific number of times:
+Execute a command a specific number of times (no LINE substitution):
 
 ```bash
 4loop 'echo hello world' 5
 # Output:
 # hello world
+# hello world  
 # hello world
 # hello world
 # hello world
-# hello world
+
+# Note: Using LINE with a number will error:
+# 4loop 'echo LINE' 5  ← ERROR: LINE needs data
+# Use this instead:
+seq 1 5 | 4loop 'echo LINE' INPUT  # Outputs: 1, 2, 3, 4, 5
 ```
 
 ### Two-File Operations
@@ -146,17 +165,18 @@ Add a delay between iterations (in seconds):
 4loop 'ping -c 1 LINE' hosts.txt 1
 ```
 
-## Timeout Handling
+## Timeout Handling & Disambiguation
 
-The tool intelligently handles timeouts to avoid ambiguity:
+Timeouts use suffixes (`s`, `ms`) to avoid ambiguity with numeric inputs:
 
-| Command | Interpretation |
-|---------|----------------|
-| `4loop 'echo LINE' 3 3` | Two numeric inputs (3×3 cartesian) |
-| `4loop 'echo LINE' 3 3s` | 3 iterations, 3 second timeout |
-| `4loop 'echo LINE' 3 0.5` | 3 iterations, 0.5s timeout (decimal = timeout) |
-| `4loop 'echo LINE1:LINE2' 3 3` | Two inputs (command uses LINE2) |
-| `seq 5 \| 4loop 'echo LINE' INPUT 2s` | Piped input, 2 second timeout |
+| Command | Result | Why |
+|---------|--------|-----|
+| `4loop 'echo hello' 3 3` | Repeats 9 times (3×3) | No LINE = numeric iteration |
+| `4loop 'echo hello' 3 3s` | Repeats 3 times, 3s delay | Explicit timeout with `s` |
+| `4loop 'echo hello' 3 0.5` | Repeats 3 times, 0.5s delay | Decimal = timeout |
+| `4loop 'echo LINE' 3` | **ERROR** | LINE requires data, not numbers |
+| `seq 1 3 \| 4loop 'echo LINE' INPUT` | Works: outputs 1,2,3 | INPUT provides data |
+| `4loop 'echo LINE' file.txt 2s` | Works: reads file, 2s delay | File provides data |
 
 ## Advanced Examples
 
