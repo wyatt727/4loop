@@ -62,49 +62,46 @@ def main():
     cmd = args[0]
     remaining = args[1:]
     
-    # Parse inputs and timeout more intelligently
+    # Smart parsing: identify inputs vs timeout
     inputs = []
     timeout = 0.075
     
-    # Collect valid inputs from left to right
     for i, arg in enumerate(remaining):
-        if is_valid_input(arg):
-            inputs.append(arg)
-        else:
-            # Not a valid input - might be timeout if it's the last arg
-            if i == len(remaining) - 1:
-                try:
-                    timeout = float(arg)
-                except ValueError:
-                    print(f"Error: '{arg}' is not a valid input or timeout")
-                    sys.exit(1)
-            else:
-                print(f"Error: '{arg}' is not a valid input source")
-                sys.exit(1)
+        # Check if this should be treated as timeout
+        should_be_timeout = False
+        
+        if i == len(remaining) - 1:  # Last argument
+            try:
+                potential_timeout = float(arg)
+                # Treat as timeout if:
+                # 1. We already have at least one input AND
+                # 2. Either: it has a decimal, OR it's 0, OR we have INPUT and this is numeric
+                if inputs and ('.' in arg or 
+                              potential_timeout == 0 or 
+                              (inputs == ['INPUT'] and arg.replace('.','').replace('-','').isdigit())):
+                    should_be_timeout = True
+            except ValueError:
+                pass
+        
+        if should_be_timeout:
+            timeout = float(arg)
             break
-    
-    # Special case: if we have valid inputs and the last arg is numeric,
-    # decide if it's timeout or another input
-    if inputs and len(remaining) > len(inputs):
-        last_arg = remaining[-1]
-        try:
-            potential_timeout = float(last_arg)
-            # Rules for treating last numeric as timeout:
-            # 1. If INPUT is present and this would be the only other arg -> timeout
-            # 2. If we already have 2 inputs -> timeout
-            # 3. If it has a decimal point -> timeout
-            # 4. If it's 0 -> timeout (common for "no delay")
-            # 5. Otherwise -> treat as input
-            if (('INPUT' in inputs and len(inputs) == 1) or
-                len(inputs) >= 2 or
-                '.' in last_arg or
-                potential_timeout == 0):
-                timeout = potential_timeout
-                # Remove the last item from inputs if we added it
-                if last_arg in inputs:
-                    inputs.pop()
-        except ValueError:
-            pass
+        elif is_valid_input(arg):
+            inputs.append(arg)
+            # Stop at 2 inputs max
+            if len(inputs) >= 2:
+                # Check if there's a timeout after
+                if i < len(remaining) - 1:
+                    try:
+                        timeout = float(remaining[i + 1])
+                    except ValueError:
+                        print(f"Error: '{remaining[i + 1]}' is not a valid timeout")
+                        sys.exit(1)
+                break
+        else:
+            # Not a valid input and not the last arg that could be timeout
+            print(f"Error: '{arg}' is not a valid input source")
+            sys.exit(1)
     
     # Must have at least one input  
     if not inputs:
