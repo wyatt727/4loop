@@ -6,6 +6,18 @@ A versatile command-line utility for iterating commands over file contents or a 
 
 4loop executes a given command multiple times, replacing the placeholder `LINE` with each line from an input file, or simply repeating the command a specified number of times. It's particularly useful for batch operations, network scanning, and automating repetitive tasks.
 
+## Quick Reference
+
+| What You Want | Command | Note |
+|---------------|---------|------|
+| Process each line in a file | `4loop 'echo LINE' file.txt` | ✓ LINE works with files |
+| Repeat command 5 times | `4loop 'echo hello' 5` | ✓ No LINE needed |
+| Process numbers 1-5 | `seq 1 5 \| 4loop 'echo LINE' INPUT` | ✓ Use seq + INPUT |
+| Test all combinations | `4loop 'curl LINE1:LINE2' hosts.txt ports.txt` | ✓ Cartesian product |
+| Pair specific items | `4loop -z 'ssh LINE1 -p LINE2' hosts.txt ports.txt` | ✓ Zip mode |
+| Distribute work | `4loop -c 'scp LINE1 LINE2:/' files.txt servers.txt` | ✓ Cycle mode |
+| ~~Use LINE with number~~ | ~~`4loop 'echo LINE' 5`~~ | ✗ **ERROR** - LINE needs data |
+
 ## Installation
 
 ```bash
