@@ -22,17 +22,27 @@ sudo cp 4loop /usr/local/bin/
 ## Usage
 
 ```bash
-4loop 'command' input [timeout]
+4loop [-z|-c] 'command' input1 [input2] [timeout]
 ```
 
 ### Parameters
 
-- `command`: The command to execute (use `LINE` as a placeholder for substitution)
-- `input`: Can be:
+- `command`: The command to execute
+  - Use `LINE`, `LINE1`, or `LINE2` as placeholders for substitution
+  - With single input: all three map to the same value
+  - With two inputs: `LINE1` = first file, `LINE2` = second file, `LINE` = first file
+- `input1`: Primary input source
   - A filename containing lines to iterate over
   - An integer specifying the number of iterations
   - `INPUT` to read from stdin
+- `input2` (optional): Secondary input source for two-file operations
 - `timeout` (optional): Delay between iterations in seconds (default: 0.075)
+
+### Iteration Modes
+
+- **Default (Cartesian Product)**: Every line from input1 with every line from input2
+- **`-z` (Zip Mode)**: Pair lines 1:1, stops at shortest file
+- **`-c` (Cycle Mode)**: Repeat shorter file to match longer file's length
 
 ## Examples
 
@@ -63,18 +73,36 @@ Execute a command a specific number of times:
 # hello world
 ```
 
-### Using Line Count from File
-Execute command as many times as there are lines in the file (without using the content):
+### Two-File Operations
+
+#### Cartesian Product (Default)
+Test all combinations:
 
 ```bash
-# If test.txt has 5 lines
-4loop 'echo foo' test.txt
-# Output:
-# foo
-# foo
-# foo
-# foo
-# foo
+# hosts.txt: host1, host2
+# ports.txt: 80, 443
+4loop 'nc -zv LINE1 LINE2' hosts.txt ports.txt
+# Tests: host1:80, host1:443, host2:80, host2:443
+```
+
+#### Zip Mode (-z)
+Pair corresponding lines:
+
+```bash
+# users.txt: alice, bob, charlie
+# passwords.txt: pass1, pass2, pass3
+4loop -z 'adduser LINE1 --password LINE2' users.txt passwords.txt
+# Pairs: alice:pass1, bob:pass2, charlie:pass3
+```
+
+#### Cycle Mode (-c)
+Repeat shorter file:
+
+```bash
+# files.txt: file1, file2, file3, file4, file5
+# servers.txt: server1, server2
+4loop -c 'scp LINE1 LINE2:backup/' files.txt servers.txt
+# Maps: file1→server1, file2→server2, file3→server1, file4→server2, file5→server1
 ```
 
 ### Piped Input
@@ -99,6 +127,42 @@ Add a delay between iterations (in seconds):
 
 # 1 second delay between commands
 4loop 'ping -c 1 LINE' hosts.txt 1
+```
+
+## Advanced Examples
+
+### Security Testing
+
+#### Password Spraying (Cartesian)
+```bash
+# Test one password against all users on all servers
+4loop 'crackmapexec smb LINE2 -u LINE1 -p Winter2025!' users.txt targets.txt
+```
+
+#### Credential Testing (Zip)
+```bash
+# Test specific username:password pairs
+4loop -z 'hydra -l LINE1 -p LINE2 ssh://target.com' users.txt passwords.txt
+```
+
+#### Distributed Scanning (Cycle)
+```bash
+# Distribute scans across multiple jump hosts
+4loop -c 'ssh LINE2 "nmap -sV LINE1"' targets.txt jumphosts.txt
+```
+
+### Web Application Testing
+
+#### Subdomain Enumeration
+```bash
+# Check all subdomain+domain combinations
+4loop 'dig +short LINE1.LINE2' subdomains.txt domains.txt
+```
+
+#### API Fuzzing with Proxies
+```bash
+# Rotate through proxies while fuzzing
+4loop -c 'curl -x LINE2 "api.target.com/LINE1"' endpoints.txt proxies.txt
 ```
 
 ## Real-World Use Cases
@@ -137,6 +201,18 @@ Convert multiple images:
 
 ```bash
 ls *.png | 4loop 'convert LINE LINE.jpg' INPUT
+```
+
+### Complex Attack Chains
+```bash
+# Stage 1: Find valid accounts (cartesian)
+4loop 'kerbrute userenum -d LINE2 LINE1' users.txt domains.txt > valid.txt
+
+# Stage 2: Test with rotating proxies (cycle)
+4loop -c 'proxychains -q -f LINE2 smbclient -L //target/share -U LINE1%Pass123' valid.txt proxies.txt
+
+# Stage 3: Exploit specific pairs (zip)
+4loop -z 'impacket-psexec LINE1:LINE2@target.com' compromised_users.txt passwords.txt
 ```
 
 ## Features
