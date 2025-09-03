@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, time
-from itertools import product, cycle
+from itertools import cycle
 
 def parse_input(source):
     """Parse an input source into a list of lines."""
