@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, time
+import sys, os, time, re
 from itertools import cycle
 
 def parse_input(source):
@@ -15,8 +15,31 @@ def parse_input(source):
     else:
         return None
 
+def parse_timeout(arg):
+    """Parse a timeout value. Returns (is_timeout, timeout_value)."""
+    # Check for explicit time suffixes
+    match = re.match(r'^(\d*\.?\d+)(ms|s)?$', arg)
+    if not match:
+        return False, None
+    
+    num_str, suffix = match.groups()
+    try:
+        value = float(num_str)
+        if suffix == 'ms':
+            return True, value / 1000.0
+        elif suffix == 's':
+            return True, value
+        # No suffix - could be timeout or input, return the value for further logic
+        return None, value  # None means "maybe timeout"
+    except ValueError:
+        return False, None
+
 def is_valid_input(source):
     """Check if something could be a valid input source."""
+    # Don't treat explicit timeouts as inputs
+    is_timeout, _ = parse_timeout(source)
+    if is_timeout:
+        return False
     return source == "INPUT" or source.isdigit() or os.path.isfile(source)
 
 def replace_vars(cmd, values):
@@ -41,11 +64,12 @@ def main():
         print("  -z: Zip mode (pair lines 1:1, stop at shortest)")
         print("  -c: Cycle mode (repeat shorter file to match longer)")
         print("  default: Cartesian product (all combinations)")
+        print("\nTimeout can use suffixes: 3s (seconds), 500ms (milliseconds)")
         print("\nExamples:")
         print("  4loop 'echo LINE' file.txt")
-        print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt")
-        print("  seq 1 5 | 4loop 'echo LINE' INPUT")
-        print("  4loop -z 'ssh LINE1 \"test LINE2\"' users.txt passwords.txt 0.5")
+        print("  4loop 'echo LINE' 5 3s          # 5 iterations, 3 second timeout")
+        print("  4loop 'curl LINE1:LINE2' hosts.txt ports.txt 500ms")
+        print("  seq 1 5 | 4loop 'echo LINE' INPUT 2s")
         sys.exit(1)
     
     # Parse mode flag
@@ -65,43 +89,64 @@ def main():
     # Smart parsing: identify inputs vs timeout
     inputs = []
     timeout = 0.075
+    timeout_found = False
     
     for i, arg in enumerate(remaining):
-        # Check if this should be treated as timeout
-        should_be_timeout = False
+        # First check if this is explicitly a timeout (has s/ms suffix)
+        is_timeout, timeout_value = parse_timeout(arg)
         
-        if i == len(remaining) - 1:  # Last argument
-            try:
-                potential_timeout = float(arg)
-                # Treat as timeout if:
-                # 1. We already have at least one input AND
-                # 2. Either: it has a decimal, OR it's 0, OR we have INPUT and this is numeric
-                if inputs and ('.' in arg or 
-                              potential_timeout == 0 or 
-                              (inputs == ['INPUT'] and arg.replace('.','').replace('-','').isdigit())):
-                    should_be_timeout = True
-            except ValueError:
-                pass
+        if is_timeout is True:
+            # Explicit timeout with suffix
+            timeout = timeout_value
+            timeout_found = True
+            # Continue processing remaining args as inputs if before this arg
+            continue
         
-        if should_be_timeout:
-            timeout = float(arg)
-            break
-        elif is_valid_input(arg):
+        # If we already found a timeout, this must be an error
+        if timeout_found:
+            print(f"Error: Unexpected argument '{arg}' after timeout")
+            sys.exit(1)
+        
+        # Check if it could be a valid input
+        if is_valid_input(arg):
             inputs.append(arg)
             # Stop at 2 inputs max
             if len(inputs) >= 2:
                 # Check if there's a timeout after
                 if i < len(remaining) - 1:
-                    try:
-                        timeout = float(remaining[i + 1])
-                    except ValueError:
+                    next_is_timeout, next_timeout = parse_timeout(remaining[i + 1])
+                    if next_is_timeout is True:
+                        timeout = next_timeout
+                    elif next_is_timeout is None:
+                        # Ambiguous number - treat as timeout since we have 2 inputs
+                        timeout = next_timeout
+                    else:
                         print(f"Error: '{remaining[i + 1]}' is not a valid timeout")
                         sys.exit(1)
                 break
         else:
-            # Not a valid input and not the last arg that could be timeout
-            print(f"Error: '{arg}' is not a valid input source")
-            sys.exit(1)
+            # Not a valid input - might be timeout without suffix if last arg
+            if i == len(remaining) - 1 and inputs:
+                # Try to parse as timeout
+                maybe_timeout, value = parse_timeout(arg)
+                if maybe_timeout is None:  # Numeric without suffix
+                    # Treat as timeout if: has decimal, is 0, or we have INPUT
+                    if '.' in arg or value == 0 or inputs == ['INPUT']:
+                        timeout = value
+                    else:
+                        # Ambiguous - could be input or timeout
+                        # If command uses LINE2, probably want two inputs
+                        if 'LINE2' in cmd:
+                            inputs.append(arg)
+                        else:
+                            # Otherwise treat as timeout for backward compat
+                            timeout = value
+                else:
+                    print(f"Error: '{arg}' is not a valid input or timeout")
+                    sys.exit(1)
+            else:
+                print(f"Error: '{arg}' is not a valid input source")
+                sys.exit(1)
     
     # Must have at least one input  
     if not inputs:
