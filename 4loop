@@ -166,8 +166,8 @@ def show_examples_help():
   {c.dim('# Process paired data')}
   {c.cmd('4loop -z \'mv LINE1 LINE2\' old_names.txt new_names.txt')}
   
-  {c.dim('# Assign IPs to hostnames')}
-  {c.cmd('4loop -z \'echo "LINE1 LINE2" >> /etc/hosts\' ips.txt hostnames.txt')}
+  {c.dim('# Test specific user:pass combinations')}
+  {c.cmd('4loop -z \'rdp_check LINE1:LINE2@target.com\' users.txt passwords.txt')}
 
 {c.bold('Cycle Mode - Load Distribution (-c)')}
   {c.dim('# Distribute files across servers (round-robin)')}
@@ -192,11 +192,11 @@ def show_examples_help():
   {c.cmd('4loop \'curl -X POST LINE1:LINE2/api/v1/status\' hosts.txt ports.txt')}
 
 {c.bold('Data Processing')}
-  {c.cmd('# Batch image conversion')}
-  {c.cmd('ls *.png | 4loop \'convert LINE -quality 85 compressed/LINE\' INPUT')}
+  {c.cmd('# Extract metadata from documents')}
+  {c.cmd('ls *.pdf | 4loop \'exiftool LINE | grep -E "Author|Creator"\' INPUT')}
   
-  {c.cmd('# Database operations')}
-  {c.cmd('4loop \'mysql -e "INSERT INTO logs VALUES (LINE)"\' data.csv')}
+  {c.cmd('# SQLMap on multiple parameters')}
+  {c.cmd('4loop \'sqlmap -u "http://target.com/page?LINE=1" --batch --level 2\' params.txt')}
   
   {c.cmd('# Search for sensitive patterns')}
   {c.cmd('ls *.conf | 4loop \'grep -E "password|api_key|secret" LINE\' INPUT')}
@@ -396,8 +396,8 @@ def show_pentesting_help():
 {c.bold('═══ WEB APPLICATION TESTING ═══')}
 
 {c.bold('Directory/File Fuzzing')}
-  {c.dim('# Directory brute-force with status checking')}
-  {c.cmd('4loop \'curl -s -o /dev/null -w "%{http_code}" http://target.com/LINE\' dirs.txt | grep -v 404')}
+  {c.dim('# Directory fuzzing with gobuster (faster)')}
+  {c.cmd('4loop \'gobuster dir -u http://LINE -w /usr/share/wordlists/dirb/common.txt -q\' targets.txt')}
   
   {c.dim('# Extension fuzzing')}
   {c.cmd('4loop \'curl -I http://target.com/admin.LINE\' extensions.txt 0.5s')}
@@ -419,8 +419,8 @@ def show_pentesting_help():
   {c.dim('# Time-based blind SQLi testing')}
   {c.cmd('4loop \'curl "http://target.com/page?id=1 AND SLEEP(5)--LINE"\' sqli_payloads.txt 10s')}
   
-  {c.dim('# Error-based SQLi')}
-  {c.cmd('4loop \'curl "http://target.com/search?q=LINE" | grep -i "sql\\|error\\|warning"\' sqli_tests.txt')}
+  {c.dim('# Boolean-based blind SQLi')}
+  {c.cmd('4loop \'curl "http://target.com/page?id=1 LINE" -s | grep -q "Welcome" && echo "TRUE: LINE"\' sqli_payloads.txt')}
 
 {c.bold('═══ POST-EXPLOITATION ═══')}
 
@@ -459,11 +459,11 @@ def show_pentesting_help():
   {c.cmd('# Stage 1: Find live hosts')}
   {c.cmd('4loop \'ping -c 1 LINE && echo LINE >> live.txt\' ip_range.txt')}
   
-  {c.cmd('# Stage 2: Port scan live hosts')}
-  {c.cmd('4loop \'nmap -sS -p 1-1000 LINE\' live.txt 2s')}
+  {c.cmd('# Stage 2: Full port scan on live hosts')}
+  {c.cmd('4loop \'masscan LINE -p1-65535 --rate 1000 -oG LINE.gnmap\' live.txt')}
   
-  {c.cmd('# Stage 3: Service enumeration')}
-  {c.cmd('4loop \'nmap -sV -p LINE2 LINE1\' live.txt open_ports.txt')}
+  {c.cmd('# Stage 3: Targeted service enumeration')}
+  {c.cmd('grep open *.gnmap | cut -d":" -f2 | 4loop \'nmap -sCV -p LINE\' INPUT')}
 
 {c.bold('Proxy Rotation Pattern')}
   {c.cmd('# Rotate through SOCKS proxies for anonymity')}
