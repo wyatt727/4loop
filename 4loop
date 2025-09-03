@@ -67,8 +67,12 @@ def main():
             try:
                 # Try to parse last arg as timeout
                 potential_timeout = float(remaining[-1])
-                # Only treat as timeout if it's not a valid input source
-                if not os.path.isfile(remaining[-1]) and not remaining[-1].isdigit() and remaining[-1] != "INPUT":
+                # Check if it's a decimal number (has a dot) or could be a timeout value
+                # Don't treat whole numbers as timeout unless they have a decimal point
+                is_timeout = ('.' in remaining[-1] or 
+                             (potential_timeout == 0) or 
+                             (not os.path.isfile(remaining[-1]) and not remaining[-1].isdigit() and remaining[-1] != "INPUT"))
+                if is_timeout:
                     timeout = potential_timeout
                     inputs = remaining[:-1]
                 else:
