@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+#---------------------------------------------------------------------------------
+# In this example, test.txt contains the numbers 1-5 each seperated by a '\n'
+#---------------------------------------------------------------------------------
+# Usage with file:            # Usage with specified integer    # Usage with line count from file 
+# 4loop 'echo LINE' test.txt    4loop 'echo hello world' 5        4loop 'echo foo' test.txt 
+# output:                       output:                           output:     
+# 1                             hello world                       foo
+# 2                             hello world                       foo 
+# 3                             hello world                       foo
+# 4                             hello world                       foo
+# 5                             hello world                       foo
+
+# Usage with piped input:
+# seq 1 5 | 4loop 'echo -LINE-' INPUT
+# output:
+# -1-
+# -2-
+# -3-
+# -4-
+# -5-
+
+# Adding a number after the input variable adjusts the timeout between each command iteration (default: .075)
+# 4loop 'echo LINE' file.txt 0
+
+# This program is especially useful with parsed port files containing IPs
+# 4loop 'showmount -e LINE' port-2049.txt
+#----------------------------------------------------------------------------------
+import sys,os,time
+try: # Define variables, timeout=arg3 unless there isn't arg3, then it's .075
+    cmd, itr, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else .075
+    if not itr.isdigit():
+        if itr == "INPUT": # If arg2=="INPUT" assume it's piped input
+            for line in sys.stdin.readlines(): 
+                os.system(cmd.replace("LINE", line.rstrip())) # For each line in input, do command but replace LINE with line from input
+                time.sleep(timeout)
+        elif os.path.exists(itr): # If arg2 is file, open file and read lines
+            with open(itr) as f:
+                for line in f:
+                    os.system(cmd.replace("LINE", line.rstrip())) # For each line in file, do command but replace LINE with line from file
+                    time.sleep(timeout)
+        else:
+            raise ValueError
+    else:
+        for i in range(int(itr)): # Else do command as many times as the int specified in Arg2
+            os.system(cmd.replace("LINE", str(i+1)))
+            time.sleep(timeout)
+except KeyboardInterrupt:
+    exit()
+except:
+    print("SYNTAX: 4loop '[command]' [iterations or filename] [optional: timeout]")
