@@ -28,17 +28,18 @@ sudo cp 4loop /usr/local/bin/
 ### Parameters
 
 - `command`: The command to execute
-  - Use `LINE`, `LINE1`, or `LINE2` as placeholders for substitution
-  - With single input: all three map to the same value
+  - `LINE`, `LINE1`, `LINE2` require actual data (file or INPUT)
+  - With single input: all three variables map to the same value
   - With two inputs: `LINE1` = first file, `LINE2` = second file, `LINE` = first file
+  - **Important**: Numbers alone cannot be used with LINE variables
 - `input1`: Primary input source
-  - A filename containing lines to iterate over
-  - An integer specifying the number of iterations
-  - `INPUT` to read from stdin
+  - A filename containing lines to iterate over (works with LINE)
+  - An integer for simple repetition (only works WITHOUT LINE)
+  - `INPUT` to read from stdin (works with LINE)
 - `input2` (optional): Secondary input source for two-file operations
 - `timeout` (optional): Delay between iterations (default: 0.075 seconds)
-  - Supports suffixes: `3s` (seconds), `500ms` (milliseconds)
-  - Without suffix: decimal numbers are timeouts, integers may be inputs
+  - Use suffixes for clarity: `3s` (seconds), `500ms` (milliseconds)
+  - Without suffix: decimals treated as timeout, whole numbers may be ambiguous
 
 ### Iteration Modes
 
