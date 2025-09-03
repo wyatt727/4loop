@@ -36,7 +36,9 @@ sudo cp 4loop /usr/local/bin/
   - An integer specifying the number of iterations
   - `INPUT` to read from stdin
 - `input2` (optional): Secondary input source for two-file operations
-- `timeout` (optional): Delay between iterations in seconds (default: 0.075)
+- `timeout` (optional): Delay between iterations (default: 0.075 seconds)
+  - Supports suffixes: `3s` (seconds), `500ms` (milliseconds)
+  - Without suffix: decimal numbers are timeouts, integers may be inputs
 
 ### Iteration Modes
 
@@ -58,6 +60,21 @@ Iterate over lines in a file, replacing `LINE` with each line's content:
 # 3
 # 4
 # 5
+```
+
+### Unambiguous Timeout Specification
+Use time suffixes to clearly specify timeouts:
+
+```bash
+# 3 iterations with 3-second delay (explicit)
+4loop 'echo hello' 3 3s
+
+# 5 iterations with 500ms delay
+4loop 'ping -c 1 target.com' 5 500ms
+
+# Without suffix, "3 3" would be two inputs!
+4loop 'echo LINE' 3 3     # Outputs: 1,2,3 repeated 3 times
+4loop 'echo LINE' 3 3s    # Outputs: 1,2,3 with 3s delays
 ```
 
 ### Repeat Command N Times
@@ -128,6 +145,18 @@ Add a delay between iterations (in seconds):
 # 1 second delay between commands
 4loop 'ping -c 1 LINE' hosts.txt 1
 ```
+
+## Timeout Handling
+
+The tool intelligently handles timeouts to avoid ambiguity:
+
+| Command | Interpretation |
+|---------|----------------|
+| `4loop 'echo LINE' 3 3` | Two numeric inputs (3×3 cartesian) |
+| `4loop 'echo LINE' 3 3s` | 3 iterations, 3 second timeout |
+| `4loop 'echo LINE' 3 0.5` | 3 iterations, 0.5s timeout (decimal = timeout) |
+| `4loop 'echo LINE1:LINE2' 3 3` | Two inputs (command uses LINE2) |
+| `seq 5 \| 4loop 'echo LINE' INPUT 2s` | Piped input, 2 second timeout |
 
 ## Advanced Examples
 
